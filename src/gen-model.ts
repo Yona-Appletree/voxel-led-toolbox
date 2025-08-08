@@ -236,18 +236,31 @@ module v(x, y, z) {
     translate([x, y, z] * voxelSize) children();
 }
 
-module voxel(walls=[1,1,1,1,1,1], solid=false, ring=false) {
-    if (solid) {
-        // Solid voxel with optional ring groove
-        solidVoxel(ring);
-    } else {
-        // Regular wall voxel
-        voxelWalls(walls);
-    }
+module groovePart() {
+    translate([-ringWidth/2, -ringWidth/2])
+    square([voxelSize/2 + ringWidth/2 + 1, ringWidth]);
 }
 
-module voxelWalls(walls) {
+module voxel(walls, grooves=[0,0,0,0]) {
     v2 = voxelSize/2;
+
+    // Groves
+    if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
+    height = ringHeight/2 + wallThickness;
+    translate([0, 0, voxelSize/2 - height + wallThickness/2])
+        difference() {
+            linear_extrude(height)
+            square([voxelSize, voxelSize], center=true);
+        
+        translate([0,0,1 + wallThickness]) linear_extrude(ringHeight/2+1) {
+            // right (+x)
+            if (grooves[0]) rotate(180) groovePart();
+            if (grooves[1]) rotate(90) groovePart();
+            if (grooves[2]) rotate(0) groovePart();
+            if (grooves[3]) rotate(270) groovePart();
+        }
+    }
+}
     
     // 0: floor (-z)
     if (walls[0]) color([0,0,1]) translate([0, 0, -v2]) rotate([0, 180, 0]) voxelWall();
@@ -351,11 +364,15 @@ rotate([180, 0, 0]) {
       walls.ceiling ? 1 : 0,
     ];
 
-    if (voxel.isPerimeter) {
-      content += `    v(${x}, ${y}, ${z}) voxel(walls=[${wallsArray.join(',')}], solid=true, ring=${voxel.needsRing ? 'true' : 'false'});\n`;
-    } else {
-      content += `    v(${x}, ${y}, ${z}) voxel(walls=[${wallsArray.join(',')}]);\n`;
-    }
+    const grooves = voxel.grooves;
+    const groovesArray = [
+      grooves.right ? 1 : 0,
+      grooves.up ? 1 : 0,
+      grooves.left ? 1 : 0,
+      grooves.down ? 1 : 0,
+    ];
+
+    content += `    v(${x}, ${y}, ${z}) voxel(walls=[${wallsArray.join(',')}], grooves=[${groovesArray.join(',')}]);\n`;
   });
 
   content += '}\n';

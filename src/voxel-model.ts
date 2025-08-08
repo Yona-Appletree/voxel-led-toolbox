@@ -13,9 +13,17 @@ export interface VoxelWalls {
   ceiling: boolean; // +z
 }
 
+export interface VoxelGrooves {
+  right?: boolean; // +x
+  up?: boolean; // +y
+  left?: boolean; // -x
+  down?: boolean; // -y
+}
+
 export interface ModelVoxel {
   pos: [number, number, number];
   walls: VoxelWalls;
+  grooves: VoxelGrooves;
   isPerimeter: boolean;
   needsRing: boolean;
   voxel: Voxel;
@@ -55,14 +63,18 @@ export function createVoxelModel(
 
   function isPerimeterVoxel(x: number, y: number, z: number): boolean {
     // Check if voxel is on the outer perimeter at the base level
-    if (z !== bounds.minZ) return false;
+    if (z !== bounds.maxZ - 2) return false;
 
     // Check if it's on the edge of the occupied space
     return (
-      x === bounds.minX ||
-      x === bounds.maxX ||
-      y === bounds.minY ||
-      y === bounds.maxY
+      !isVoxelAt(x + 1, y, z) ||
+      !isVoxelAt(x - 1, y, z) ||
+      !isVoxelAt(x, y + 1, z) ||
+      !isVoxelAt(x, y - 1, z) ||
+      !isVoxelAt(x + 1, y + 1, z) ||
+      !isVoxelAt(x - 1, y + 1, z) ||
+      !isVoxelAt(x + 1, y - 1, z) ||
+      !isVoxelAt(x - 1, y - 1, z)
     );
   }
 
@@ -82,6 +94,41 @@ export function createVoxelModel(
     };
   }
 
+  function calculateGrooves(x: number, y: number, z: number): VoxelGrooves {
+    if (z !== bounds.maxZ - 2) return {};
+
+    const up = isVoxelAt(x, y - 1, z);
+    const down = isVoxelAt(x, y + 1, z);
+    const left = isVoxelAt(x - 1, y, z);
+    const right = isVoxelAt(x + 1, y, z);
+
+    const upLeft = isVoxelAt(x - 1, y - 1, z);
+    const upRight = isVoxelAt(x + 1, y - 1, z);
+    const downLeft = isVoxelAt(x - 1, y + 1, z);
+    const downRight = isVoxelAt(x + 1, y + 1, z);
+
+    return {
+      left:
+        (right && (!up || !down)) ||
+        (right && up && !upRight) ||
+        (right && down && !downRight),
+      right:
+        (left && (!up || !down)) ||
+        (left && up && !upLeft) ||
+        (left && down && !downLeft),
+      up:
+        (down && (!left || !right)) ||
+        (down && left && !downLeft) ||
+        (down && right && !downRight)
+      ,
+       down:
+         (up && (!left || !right)) ||
+         (up && right && !upRight) ||
+         (up && left && !upLeft)
+        ,
+    };
+  }
+
   function voxelAt(x: number, y: number, z: number): ModelVoxel | null {
     const arrX = x - bounds.minX;
     const arrY = y - bounds.minY;
@@ -98,6 +145,7 @@ export function createVoxelModel(
     return {
       pos: [x, y, z],
       walls: calculateWalls(x, y, z),
+      grooves: calculateGrooves(x, y, z),
       isPerimeter: isPerimeterVoxel(x, y, z),
       needsRing: needsRingGroove(x, y, z),
       voxel,
