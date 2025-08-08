@@ -1,5 +1,5 @@
 // Generated ring file
-// Generated at 2025-08-08T21:49:20.145Z
+// Generated at 2025-08-08T22:28:59.016Z
 // by gen-model.ts
 
 
@@ -19,6 +19,12 @@ module groovePart() {
     square([voxelSize/2 + ringWidth/2 + 1, ringWidth]);
 }
 
+module ringPart() {
+    // Generate positive ring piece that fits into groove
+    translate([-ringWidth/2, -ringWidth/2])
+    square([voxelSize/2 + ringWidth/2, ringWidth]);
+}
+
 module voxel(walls, grooves=[0,0,0,0]) {
     v2 = voxelSize/2;
 
@@ -30,8 +36,8 @@ module voxel(walls, grooves=[0,0,0,0]) {
             linear_extrude(height)
             square([voxelSize, voxelSize], center=true);
         
-        translate([0,0,1 + wallThickness]) linear_extrude(ringHeight/2+1) {
-            // right (+x)
+        offset(ringTolerance)
+            translate([0,0,1 + wallThickness]) linear_extrude(ringHeight/2+1) {
             if (grooves[0]) rotate(180) groovePart();
             if (grooves[1]) rotate(90) groovePart();
             if (grooves[2]) rotate(0) groovePart();
@@ -95,94 +101,102 @@ module ringGroove() {
         square([ringWidth + ringTolerance, ringHeight + ringTolerance], center=true);
 }
 
-module ringCell() {
-    // Generate the ring that fits in the groove
-    rotate_extrude()
-        translate([voxelSize/2 - ringWidth/2, 0])
-        square([ringWidth, ringHeight], center=true);
+module ringCell(grooves=[0,0,0,0]) {
+    // Generate positive ring pieces that fit into grooves
+    if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
+        height = ringHeight;
+        translate([0, 0, voxelSize/2 - height/2])
+            linear_extrude(height) {
+                // right (+x)
+                if (grooves[0]) rotate(180) ringPart();
+                if (grooves[1]) rotate(90) ringPart();
+                if (grooves[2]) rotate(0) ringPart();
+                if (grooves[3]) rotate(270) ringPart();
+            }
+    }
 }
 
 
 // Rings for connecting front and back parts
 union() {
-    v(-2, -9, 4) ringCell();
-    v(-1, -9, 4) ringCell();
-    v(0, -9, 4) ringCell();
-    v(1, -9, 4) ringCell();
-    v(-2, -8, 4) ringCell();
-    v(1, -8, 4) ringCell();
-    v(-2, -7, 4) ringCell();
-    v(1, -7, 4) ringCell();
-    v(-2, -6, 4) ringCell();
-    v(-1, -6, 4) ringCell();
-    v(0, -6, 4) ringCell();
-    v(1, -6, 4) ringCell();
-    v(-1, -5, 4) ringCell();
-    v(0, -5, 4) ringCell();
-    v(-2, -4, 4) ringCell();
-    v(-1, -4, 4) ringCell();
-    v(0, -4, 4) ringCell();
-    v(1, -4, 4) ringCell();
-    v(-2, -3, 4) ringCell();
-    v(1, -3, 4) ringCell();
-    v(2, -3, 4) ringCell();
-    v(-2, -2, 4) ringCell();
-    v(-1, -2, 4) ringCell();
-    v(2, -2, 4) ringCell();
-    v(3, -2, 4) ringCell();
-    v(-1, -1, 4) ringCell();
-    v(0, -1, 4) ringCell();
-    v(3, -1, 4) ringCell();
-    v(4, -1, 4) ringCell();
-    v(0, 0, 4) ringCell();
-    v(1, 0, 4) ringCell();
-    v(4, 0, 4) ringCell();
-    v(5, 0, 4) ringCell();
-    v(-6, 1, 4) ringCell();
-    v(-5, 1, 4) ringCell();
-    v(-4, 1, 4) ringCell();
-    v(1, 1, 4) ringCell();
-    v(2, 1, 4) ringCell();
-    v(5, 1, 4) ringCell();
-    v(6, 1, 4) ringCell();
-    v(-7, 2, 4) ringCell();
-    v(-6, 2, 4) ringCell();
-    v(-4, 2, 4) ringCell();
-    v(-3, 2, 4) ringCell();
-    v(2, 2, 4) ringCell();
-    v(6, 2, 4) ringCell();
-    v(-7, 3, 4) ringCell();
-    v(-3, 3, 4) ringCell();
-    v(2, 3, 4) ringCell();
-    v(6, 3, 4) ringCell();
-    v(-7, 4, 4) ringCell();
-    v(-3, 4, 4) ringCell();
-    v(-2, 4, 4) ringCell();
-    v(1, 4, 4) ringCell();
-    v(2, 4, 4) ringCell();
-    v(6, 4, 4) ringCell();
-    v(-7, 5, 4) ringCell();
-    v(-6, 5, 4) ringCell();
-    v(-2, 5, 4) ringCell();
-    v(-1, 5, 4) ringCell();
-    v(0, 5, 4) ringCell();
-    v(1, 5, 4) ringCell();
-    v(5, 5, 4) ringCell();
-    v(6, 5, 4) ringCell();
-    v(-6, 6, 4) ringCell();
-    v(-5, 6, 4) ringCell();
-    v(4, 6, 4) ringCell();
-    v(5, 6, 4) ringCell();
-    v(-5, 7, 4) ringCell();
-    v(-4, 7, 4) ringCell();
-    v(3, 7, 4) ringCell();
-    v(4, 7, 4) ringCell();
-    v(-4, 8, 4) ringCell();
-    v(-3, 8, 4) ringCell();
-    v(-2, 8, 4) ringCell();
-    v(-1, 8, 4) ringCell();
-    v(0, 8, 4) ringCell();
-    v(1, 8, 4) ringCell();
-    v(2, 8, 4) ringCell();
-    v(3, 8, 4) ringCell();
+    v(-2, -9, 4) ringCell(grooves=[0,1,1,0]);
+    v(-1, -9, 4) ringCell(grooves=[1,0,1,0]);
+    v(0, -9, 4) ringCell(grooves=[1,0,1,0]);
+    v(1, -9, 4) ringCell(grooves=[1,1,0,0]);
+    v(-2, -8, 4) ringCell(grooves=[0,1,0,1]);
+    v(1, -8, 4) ringCell(grooves=[0,1,0,1]);
+    v(-2, -7, 4) ringCell(grooves=[0,1,0,1]);
+    v(1, -7, 4) ringCell(grooves=[0,1,0,1]);
+    v(-2, -6, 4) ringCell(grooves=[0,0,1,1]);
+    v(-1, -6, 4) ringCell(grooves=[1,1,0,0]);
+    v(0, -6, 4) ringCell(grooves=[0,1,1,0]);
+    v(1, -6, 4) ringCell(grooves=[1,0,0,1]);
+    v(-1, -5, 4) ringCell(grooves=[0,1,0,1]);
+    v(0, -5, 4) ringCell(grooves=[0,1,0,1]);
+    v(-2, -4, 4) ringCell(grooves=[0,1,1,0]);
+    v(-1, -4, 4) ringCell(grooves=[1,0,0,1]);
+    v(0, -4, 4) ringCell(grooves=[0,0,1,1]);
+    v(1, -4, 4) ringCell(grooves=[1,1,0,0]);
+    v(-3, -3, 4) ringCell(grooves=[0,1,1,0]);
+    v(-2, -3, 4) ringCell(grooves=[1,0,0,1]);
+    v(1, -3, 4) ringCell(grooves=[0,1,0,1]);
+    v(-4, -2, 4) ringCell(grooves=[0,1,1,0]);
+    v(-3, -2, 4) ringCell(grooves=[1,0,0,1]);
+    v(0, -2, 4) ringCell(grooves=[0,1,1,0]);
+    v(1, -2, 4) ringCell(grooves=[1,0,0,1]);
+    v(-5, -1, 4) ringCell(grooves=[0,1,1,0]);
+    v(-4, -1, 4) ringCell(grooves=[1,0,0,1]);
+    v(-1, -1, 4) ringCell(grooves=[0,1,1,0]);
+    v(0, -1, 4) ringCell(grooves=[1,0,0,1]);
+    v(-6, 0, 4) ringCell(grooves=[0,1,1,0]);
+    v(-5, 0, 4) ringCell(grooves=[1,0,0,1]);
+    v(-2, 0, 4) ringCell(grooves=[0,1,1,0]);
+    v(-1, 0, 4) ringCell(grooves=[1,0,0,1]);
+    v(-7, 1, 4) ringCell(grooves=[0,1,1,0]);
+    v(-6, 1, 4) ringCell(grooves=[1,0,0,1]);
+    v(-3, 1, 4) ringCell(grooves=[0,1,1,0]);
+    v(-2, 1, 4) ringCell(grooves=[1,0,0,1]);
+    v(3, 1, 4) ringCell(grooves=[0,1,1,0]);
+    v(4, 1, 4) ringCell(grooves=[1,0,1,0]);
+    v(5, 1, 4) ringCell(grooves=[1,1,0,0]);
+    v(-7, 2, 4) ringCell(grooves=[0,1,0,1]);
+    v(-3, 2, 4) ringCell(grooves=[0,1,0,1]);
+    v(2, 2, 4) ringCell(grooves=[0,1,1,0]);
+    v(3, 2, 4) ringCell(grooves=[1,0,0,1]);
+    v(5, 2, 4) ringCell(grooves=[0,0,1,1]);
+    v(6, 2, 4) ringCell(grooves=[1,1,0,0]);
+    v(-7, 3, 4) ringCell(grooves=[0,1,0,1]);
+    v(-3, 3, 4) ringCell(grooves=[0,1,0,1]);
+    v(2, 3, 4) ringCell(grooves=[0,1,0,1]);
+    v(6, 3, 4) ringCell(grooves=[0,1,0,1]);
+    v(-7, 4, 4) ringCell(grooves=[0,1,0,1]);
+    v(-3, 4, 4) ringCell(grooves=[0,0,1,1]);
+    v(-2, 4, 4) ringCell(grooves=[1,1,0,0]);
+    v(1, 4, 4) ringCell(grooves=[0,1,1,0]);
+    v(2, 4, 4) ringCell(grooves=[1,0,0,1]);
+    v(6, 4, 4) ringCell(grooves=[0,1,0,1]);
+    v(-7, 5, 4) ringCell(grooves=[0,0,1,1]);
+    v(-6, 5, 4) ringCell(grooves=[1,1,0,0]);
+    v(-2, 5, 4) ringCell(grooves=[0,0,1,1]);
+    v(-1, 5, 4) ringCell(grooves=[1,0,1,0]);
+    v(0, 5, 4) ringCell(grooves=[1,0,1,0]);
+    v(1, 5, 4) ringCell(grooves=[1,0,0,1]);
+    v(5, 5, 4) ringCell(grooves=[0,1,1,0]);
+    v(6, 5, 4) ringCell(grooves=[1,0,0,1]);
+    v(-6, 6, 4) ringCell(grooves=[0,0,1,1]);
+    v(-5, 6, 4) ringCell(grooves=[1,1,0,0]);
+    v(4, 6, 4) ringCell(grooves=[0,1,1,0]);
+    v(5, 6, 4) ringCell(grooves=[1,0,0,1]);
+    v(-5, 7, 4) ringCell(grooves=[0,0,1,1]);
+    v(-4, 7, 4) ringCell(grooves=[1,1,0,0]);
+    v(3, 7, 4) ringCell(grooves=[0,1,1,0]);
+    v(4, 7, 4) ringCell(grooves=[1,0,0,1]);
+    v(-4, 8, 4) ringCell(grooves=[0,0,1,1]);
+    v(-3, 8, 4) ringCell(grooves=[1,0,1,0]);
+    v(-2, 8, 4) ringCell(grooves=[1,0,1,0]);
+    v(-1, 8, 4) ringCell(grooves=[1,0,1,0]);
+    v(0, 8, 4) ringCell(grooves=[1,0,1,0]);
+    v(1, 8, 4) ringCell(grooves=[1,0,1,0]);
+    v(2, 8, 4) ringCell(grooves=[1,0,1,0]);
+    v(3, 8, 4) ringCell(grooves=[1,0,0,1]);
 }

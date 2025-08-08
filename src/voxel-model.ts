@@ -25,7 +25,6 @@ export interface ModelVoxel {
   walls: VoxelWalls;
   grooves: VoxelGrooves;
   isPerimeter: boolean;
-  needsRing: boolean;
   voxel: Voxel;
 }
 
@@ -35,9 +34,12 @@ export interface VoxelModel {
   readonly splitLayer: number;
   voxelAt(x: number, y: number, z: number): ModelVoxel | null;
   getAllVoxels(): ModelVoxel[];
-  getFrontVoxels(): ModelVoxel[];
-  getBackVoxels(): ModelVoxel[];
   getPerimeterVoxels(): ModelVoxel[];
+}
+
+export interface SplitModels {
+  frontModel: VoxelModel;
+  backModel: VoxelModel;
 }
 
 export function createVoxelModel(
@@ -61,28 +63,6 @@ export function createVoxelModel(
     return voxelData[arrZ]![arrY]![arrX] !== null;
   }
 
-  function isPerimeterVoxel(x: number, y: number, z: number): boolean {
-    // Check if voxel is on the outer perimeter at the base level
-    if (z !== bounds.maxZ - 2) return false;
-
-    // Check if it's on the edge of the occupied space
-    return (
-      !isVoxelAt(x + 1, y, z) ||
-      !isVoxelAt(x - 1, y, z) ||
-      !isVoxelAt(x, y + 1, z) ||
-      !isVoxelAt(x, y - 1, z) ||
-      !isVoxelAt(x + 1, y + 1, z) ||
-      !isVoxelAt(x - 1, y + 1, z) ||
-      !isVoxelAt(x + 1, y - 1, z) ||
-      !isVoxelAt(x - 1, y - 1, z)
-    );
-  }
-
-  function needsRingGroove(x: number, y: number, z: number): boolean {
-    // Ring grooves are needed for perimeter voxels at the split layer
-    return isPerimeterVoxel(x, y, z) && z === actualSplitLayer;
-  }
-
   function calculateWalls(x: number, y: number, z: number): VoxelWalls {
     return {
       floor: !isVoxelAt(x, y, z - 1), // -z
@@ -90,12 +70,12 @@ export function createVoxelModel(
       up: !isVoxelAt(x, y + 1, z), // +y
       left: !isVoxelAt(x - 1, y, z), // -x
       down: !isVoxelAt(x, y - 1, z), // -y
-      ceiling: !isVoxelAt(x, y, z + 1), // +z
+      ceiling: !isVoxelAt(x, y, z + 1) && z < bounds.maxZ - 1, // +z
     };
   }
 
   function calculateGrooves(x: number, y: number, z: number): VoxelGrooves {
-    if (z !== bounds.maxZ - 2) return {};
+    if (z !== bounds.maxZ) return {};
 
     const up = isVoxelAt(x, y - 1, z);
     const down = isVoxelAt(x, y + 1, z);
@@ -119,13 +99,11 @@ export function createVoxelModel(
       up:
         (down && (!left || !right)) ||
         (down && left && !downLeft) ||
-        (down && right && !downRight)
-      ,
-       down:
-         (up && (!left || !right)) ||
-         (up && right && !upRight) ||
-         (up && left && !upLeft)
-        ,
+        (down && right && !downRight),
+      down:
+        (up && (!left || !right)) ||
+        (up && right && !upRight) ||
+        (up && left && !upLeft),
     };
   }
 
@@ -142,12 +120,14 @@ export function createVoxelModel(
     const voxel = voxelData[arrZ]![arrY]![arrX];
     if (!voxel) return null;
 
+    const grooves = calculateGrooves(x, y, z);
+
     return {
       pos: [x, y, z],
       walls: calculateWalls(x, y, z),
-      grooves: calculateGrooves(x, y, z),
-      isPerimeter: isPerimeterVoxel(x, y, z),
-      needsRing: needsRingGroove(x, y, z),
+      grooves,
+      isPerimeter:
+        grooves.right || grooves.up || grooves.left || grooves.down || false,
       voxel,
     };
   }
@@ -169,14 +149,6 @@ export function createVoxelModel(
     return result;
   }
 
-  function getFrontVoxels(): ModelVoxel[] {
-    return getAllVoxels().filter(v => v.pos[2] <= actualSplitLayer);
-  }
-
-  function getBackVoxels(): ModelVoxel[] {
-    return getAllVoxels().filter(v => v.pos[2] > actualSplitLayer);
-  }
-
   function getPerimeterVoxels(): ModelVoxel[] {
     return getAllVoxels().filter(v => v.isPerimeter);
   }
@@ -187,8 +159,146 @@ export function createVoxelModel(
     splitLayer: actualSplitLayer,
     voxelAt,
     getAllVoxels,
-    getFrontVoxels,
-    getBackVoxels,
     getPerimeterVoxels,
+  };
+}
+
+export function createSplitModels(
+  voxelData: VoxelData,
+  bounds: BoundingBox,
+  splitLayer?: number
+): SplitModels {
+  const actualSplitLayer =
+    splitLayer ?? Math.floor((bounds.maxZ - bounds.minZ) / 2) + bounds.minZ;
+
+  console.log(
+    `Split layer: ${actualSplitLayer}, bounds: Z[${bounds.minZ}..${bounds.maxZ}]`
+  );
+
+  // Create front voxel data (voxels at or below split layer)
+  const frontVoxelData: VoxelData = [];
+  const frontBounds = { ...bounds };
+  frontBounds.maxZ = actualSplitLayer;
+
+  for (let z = 0; z < voxelData.length; z++) {
+    const realZ = z + bounds.minZ;
+    if (realZ <= actualSplitLayer && voxelData[z]) {
+      frontVoxelData[z] = voxelData[z]!;
+    }
+  }
+
+  // Create back voxel data (voxels above split layer)
+  // Transform: flip z and x axes (rotation around y-axis by 180 degrees)
+  const backVoxelData: VoxelData = [];
+
+  // Calculate dimensions for back model
+  const zBackStart = actualSplitLayer + 1;
+  const zBackSize = bounds.maxZ - zBackStart + 1;
+
+  if (zBackSize <= 0) {
+    console.log('No back voxels - split layer is at or above max Z');
+    return {
+      frontModel: createVoxelModel(
+        frontVoxelData,
+        frontBounds,
+        actualSplitLayer
+      ),
+      backModel: createVoxelModel([], {
+        minX: 0,
+        maxX: 0,
+        minY: 0,
+        maxY: 0,
+        minZ: 0,
+        maxZ: 0,
+      }),
+    };
+  }
+
+  console.log(
+    `Back Z range: ${zBackStart} to ${bounds.maxZ}, size: ${zBackSize}`
+  );
+
+  // The back bounds should remain the same size, just different positioning
+  const backBounds = {
+    minX: bounds.minX,
+    maxX: bounds.maxX,
+    minY: bounds.minY,
+    maxY: bounds.maxY,
+    minZ: bounds.minZ,
+    maxZ: bounds.minZ + zBackSize - 1,
+  };
+
+  // Calculate dimensions
+  const xSize = bounds.maxX - bounds.minX + 1;
+  const ySize = bounds.maxY - bounds.minY + 1;
+
+  // Initialize back voxel data array
+  for (let z = 0; z < zBackSize; z++) {
+    backVoxelData[z] = [];
+    for (let y = 0; y < ySize; y++) {
+      backVoxelData[z]![y] = [];
+      for (let x = 0; x < xSize; x++) {
+        backVoxelData[z]![y]![x] = null;
+      }
+    }
+  }
+
+  let backVoxelCount = 0;
+
+  // Copy and transform back voxels
+  for (let z = zBackStart; z <= bounds.maxZ; z++) {
+    const origZIndex = z - bounds.minZ;
+    if (origZIndex < voxelData.length && voxelData[origZIndex]) {
+      for (let y = bounds.minY; y <= bounds.maxY; y++) {
+        const origYIndex = y - bounds.minY;
+        if (
+          origYIndex < voxelData[origZIndex]!.length &&
+          voxelData[origZIndex]![origYIndex]
+        ) {
+          for (let x = bounds.minX; x <= bounds.maxX; x++) {
+            const origXIndex = x - bounds.minX;
+            const voxel = voxelData[origZIndex]![origYIndex]![origXIndex];
+            if (voxel) {
+              // Transform coordinates: flip z and x
+              // For Z: map the back layers to start from 0
+              // The highest Z in the back section should become Z=0 in the new model
+              const newZIndex = bounds.maxZ - z; // This will give us values from 0 to zBackSize-1
+
+              // For X: flip the axis by mapping array indices
+              // Original array index: x - bounds.minX (ranges from 0 to xSize-1)
+              // Flipped array index: (xSize-1) - (x - bounds.minX)
+              const newXIndex = xSize - 1 - origXIndex;
+              const newYIndex = y - bounds.minY; // Y unchanged
+
+              if (
+                newZIndex >= 0 &&
+                newZIndex < backVoxelData.length &&
+                newYIndex >= 0 &&
+                newYIndex < backVoxelData[newZIndex]!.length &&
+                newXIndex >= 0 &&
+                newXIndex < backVoxelData[newZIndex]![newYIndex]!.length
+              ) {
+                backVoxelData[newZIndex]![newYIndex]![newXIndex] = voxel;
+                backVoxelCount++;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  console.log(`Created back model with ${backVoxelCount} voxels`);
+
+  const frontModel = createVoxelModel(
+    frontVoxelData,
+    frontBounds,
+    actualSplitLayer
+  );
+  const backModel = createVoxelModel(backVoxelData, backBounds);
+
+  return {
+    frontModel,
+    backModel,
   };
 }

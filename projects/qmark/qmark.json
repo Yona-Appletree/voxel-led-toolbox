@@ -5,5 +5,6 @@
   "wallThickness": 2,
   "ringWidth": 2,
   "ringHeight": 6,
-  "ringTolerance": 0.3
+  "ringTolerance": 0.3,
+  "splitLayer": 3
 }
