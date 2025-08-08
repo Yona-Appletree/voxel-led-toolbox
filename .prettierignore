@@ -1,0 +1,26 @@
+# Build outputs
+dist/
+node_modules/
+
+# Generated files
+*.min.js
+*.min.css
+
+# Project specific files
+projects/**/*.scad
+projects/**/*.stl
+projects/**/*.gox
+projects/**/*.txt
+
+# Package manager files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

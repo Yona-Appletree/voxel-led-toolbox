@@ -1,47 +1,51 @@
 #!/usr/bin/env node --experimental-strip-types
 
-import { readFileSync, writeFileSync } from "fs";
-import { basename, extname, dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync, writeFileSync } from 'fs';
+import { basename, extname, dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const isMainModule = process.argv[1] === __filename;
+
+//
+// Generates an OpenSCAD file that contains the voxel data for a given Goxel file.
+//
 
 // Main execution
 function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     console.log(
-      "Usage: goxel-txt-to-scad.ts [options] <input.txt> [output.scad]"
+      'Usage: goxel-txt-to-scad.ts [options] <input.txt> [output.scad]'
     );
-    console.log("");
-    console.log("Converts Goxel txt format to OpenSCAD 3D array");
-    console.log("");
-    console.log("Options:");
+    console.log('');
+    console.log('Converts Goxel txt format to OpenSCAD 3D array');
+    console.log('');
+    console.log('Options:');
     console.log(
       "  --no-flip-y    Don't flip the Y axis (default: flip for intuitive viewing)"
     );
-    console.log("  -h, --help     Show this help message");
-    console.log("");
+    console.log('  -h, --help     Show this help message');
+    console.log('');
     console.log(
       'If no output file is specified, uses input filename + "-voxels.scad"'
     );
-    process.exit(args.includes("--help") || args.includes("-h") ? 0 : 1);
+    process.exit(args.includes('--help') || args.includes('-h') ? 0 : 1);
   }
 
   // Parse options
   const options = {
-    flipY: !args.includes("--no-flip-y"),
+    flipY: !args.includes('--no-flip-y'),
   };
 
   // Filter out options to get file arguments
   const fileArgs = args.filter(
-    (arg) => !arg.startsWith("--") && !arg.startsWith("-")
+    arg => !arg.startsWith('--') && !arg.startsWith('-')
   );
 
   if (fileArgs.length === 0) {
-    console.error("Error: No input file specified");
+    console.error('Error: No input file specified');
     process.exit(1);
   }
 
@@ -85,9 +89,9 @@ function convertGoxelToOpenSCAD(
 
     console.log(`OpenSCAD array written to: ${finalOutputPath}`);
     console.log(`Variable name: ${variableName}`);
-    console.log(`Y-axis flipped: ${options.flipY ? "yes" : "no"}`);
+    console.log(`Y-axis flipped: ${options.flipY ? 'yes' : 'no'}`);
   } catch (error) {
-    console.error("Error:", error instanceof Error ? error.message : error);
+    console.error('Error:', error instanceof Error ? error.message : error);
     process.exit(1);
   }
 }
@@ -111,7 +115,7 @@ function createVoxelArray(
     );
 
   // Fill in the voxels
-  voxels.forEach((voxel) => {
+  voxels.forEach(voxel => {
     const x = voxel.x - bounds.minX;
     let y = voxel.y - bounds.minY;
     const z = voxel.z - bounds.minZ;
@@ -141,12 +145,12 @@ function formatArrayAsOpenSCAD(
   let output = `// Generated from ${inputFileName} at ${timestamp}\n`;
   output += `// by goxel-txt-to-scad.ts\n`;
   output += `// Array dimensions: [z][y][x] = [${depth}][${height}][${width}]\n`;
-  output += `// Y-axis flipped: ${options.flipY ? "yes" : "no"}\n\n`;
+  output += `// Y-axis flipped: ${options.flipY ? 'yes' : 'no'}\n\n`;
 
   // Generate size variable name from input filename
-  const baseName = inputFileName.replace(/\.[^/.]+$/, ""); // Remove extension
+  const baseName = inputFileName.replace(/\.[^/.]+$/, ''); // Remove extension
   const sizeVariableName =
-    baseName.replace(/[^a-zA-Z0-9]/g, "_").replace(/^([0-9])/, "_$1") + "Size";
+    baseName.replace(/[^a-zA-Z0-9]/g, '_').replace(/^([0-9])/, '_$1') + 'Size';
 
   output += `${sizeVariableName} = [${width}, ${height}, ${depth}]; // [width, height, depth]\n\n`;
 
@@ -154,33 +158,33 @@ function formatArrayAsOpenSCAD(
 
   array.forEach((layer, z) => {
     output += `    [ // ${z}\n`;
-    layer.forEach((row) => {
-      output += `        [${row.join(",")}]`;
+    layer.forEach(row => {
+      output += `        [${row.join(',')}]`;
       if (row !== layer[layer.length - 1]) {
-        output += ",";
+        output += ',';
       }
-      output += "\n";
+      output += '\n';
     });
-    output += "    ]";
+    output += '    ]';
     if (z !== array.length - 1) {
-      output += ",";
+      output += ',';
     }
-    output += "\n\n";
+    output += '\n\n';
   });
 
-  output += "];\n";
+  output += '];\n';
 
   return output;
 }
 
 // Utility functions
 function parseGoxelFile(filePath: string): Voxel[] {
-  const content = readFileSync(filePath, "utf-8");
+  const content = readFileSync(filePath, 'utf-8');
   const lines = content
-    .split("\n")
-    .filter((line) => line.trim() && !line.startsWith("#"));
+    .split('\n')
+    .filter(line => line.trim() && !line.startsWith('#'));
 
-  return lines.map((line) => {
+  return lines.map(line => {
     const parts = line.trim().split(/\s+/);
     if (parts.length !== 4) {
       throw new Error(`Invalid line format: ${line}`);
@@ -232,7 +236,7 @@ function generateVariableName(inputPath: string): string {
   const baseName = basename(inputPath, extname(inputPath));
   // Convert to camelCase and ensure it's a valid identifier
   return (
-    baseName.replace(/[^a-zA-Z0-9]/g, "_").replace(/^([0-9])/, "_$1") + "Voxels"
+    baseName.replace(/[^a-zA-Z0-9]/g, '_').replace(/^([0-9])/, '_$1') + 'Voxels'
   );
 }
 
