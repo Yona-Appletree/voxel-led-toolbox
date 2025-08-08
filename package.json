@@ -1,0 +1,27 @@
+{
+  "name": "voxel-led-toolbox",
+  "version": "1.0.0",
+  "description": "Tools for building voxel-based LED projects",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "voxel",
+    "led",
+    "3d",
+    "openscad"
+  ],
+  "author": "Yona Appletree",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
