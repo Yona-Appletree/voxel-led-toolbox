@@ -11,7 +11,9 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm type-check && pnpm lint && pnpm format:check"
+    "check": "pnpm type-check && pnpm lint && pnpm format:check",
+    "dev": "tsx src/gen-model.ts",
+    "watch": "nodemon --watch src --watch projects --ext ts,js,json,txt --exec \"tsx src/gen-model.ts\""
   },
   "keywords": [
     "voxel",
@@ -31,7 +33,9 @@
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "nodemon": "^3.1.10",
     "prettier": "^3.6.2",
+    "tsx": "^4.20.3",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.39.0",
     "vitest": "^3.2.4"
