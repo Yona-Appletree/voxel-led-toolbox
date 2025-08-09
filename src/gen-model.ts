@@ -14,9 +14,11 @@ import {
   createVoxelModel,
   createSplitModels,
   type VoxelModel,
-  type ModelVoxel,
   type SplitModels,
 } from './voxel-model.ts';
+import { exec } from 'child_process';
+
+const openSCADPath = '/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD';
 
 // Main entry point
 if (import.meta.url === `file://${encodeURI(process.argv[1] || '')}`) {
@@ -67,7 +69,7 @@ async function main(args: string[]): Promise<void> {
   }
 
   // Load and process project
-  const projectData = await loadProjectFromPath(projectPath);
+  const projectData = await loadProjectFromPath(projectName, projectPath);
   await generateOpenSCADFiles(projectData, projectPath);
 }
 
@@ -92,8 +94,6 @@ async function askUserToCreateProject(projectName: string): Promise<boolean> {
 }
 // Project configuration schema
 const ProjectConfig = z.object({
-  scadFile: z.string(),
-  voxelFile: z.string(),
   voxelSize: z.number().default(10),
   wallThickness: z.number().default(2),
   ringWidth: z.number().default(2),
@@ -105,6 +105,7 @@ const ProjectConfig = z.object({
 export type ProjectConfig = z.infer<typeof ProjectConfig>;
 
 interface ProjectData {
+  name: string;
   config: ProjectConfig;
   voxelData: VoxelData;
   model: VoxelModel;
@@ -122,8 +123,6 @@ async function createNewProject(
 
   // Create default project config
   const defaultConfig: ProjectConfig = {
-    scadFile: `${projectName}.scad`,
-    voxelFile: `${projectName}.txt`,
     voxelSize: 10,
     wallThickness: 2,
     ringWidth: 2,
@@ -144,11 +143,14 @@ async function createNewProject(
 
   console.log(`Project '${projectName}' created successfully!`);
   console.log(
-    `Edit ${join(projectPath, defaultConfig.voxelFile)} to add your voxel data.`
+    `Edit ${join(projectPath, projectName + '.txt')} to add your voxel data.`
   );
 }
 
-async function loadProjectFromPath(projectPath: string): Promise<ProjectData> {
+async function loadProjectFromPath(
+  projectName: string,
+  projectPath: string
+): Promise<ProjectData> {
   // Find the project config file
   const files = await import('fs').then(fs => fs.promises.readdir(projectPath));
   const configFile = files.find(f => f.endsWith('.json'));
@@ -162,7 +164,7 @@ async function loadProjectFromPath(projectPath: string): Promise<ProjectData> {
   const config = ProjectConfig.parse(configData);
 
   // Load voxel data
-  const voxelPath = join(projectPath, config.voxelFile);
+  const voxelPath = join(projectPath, projectName + '.txt');
   if (!existsSync(voxelPath)) {
     throw new Error(`Voxel file not found: ${voxelPath}`);
   }
@@ -178,49 +180,127 @@ async function loadProjectFromPath(projectPath: string): Promise<ProjectData> {
   const model = createVoxelModel(voxelData, bounds, config.splitLayer);
   const splitModels = createSplitModels(voxelData, bounds, config.splitLayer);
 
-  console.log(`Loaded ${voxels.length} voxels from ${config.voxelFile}`);
+  console.log(`Loaded ${voxels.length} voxels from ${projectName}.txt`);
   console.log(
     `Bounds: X[${bounds.minX}..${bounds.maxX}] Y[${bounds.minY}..${bounds.maxY}] Z[${bounds.minZ}..${bounds.maxZ}]`
   );
   console.log(`Split layer: ${model.splitLayer}`);
 
-  return { config, voxelData, model, splitModels };
+  return { name: projectName, config, voxelData, model, splitModels };
 }
 
 async function generateOpenSCADFiles(
   projectData: ProjectData,
   projectPath: string
 ): Promise<void> {
-  const { config, model, splitModels } = projectData;
-  const baseName = config.scadFile.replace(/\.scad$/, '');
-
-  // Generate the three output files
-  const frontFile = `${baseName}-front.scad`;
-  const backFile = `${baseName}-back.scad`;
-  const ringFile = `${baseName}-ring.scad`;
+  const { name, config, model, splitModels } = projectData;
 
   console.log('Generating OpenSCAD files...');
 
+  const width = config.voxelSize * (model.bounds.maxX - model.bounds.minX);
+
   // Generate common module code
-  const commonCode = genCommonCode(config);
+  let generatedCode = `
+// Generated at ${new Date().toISOString()}
+// by gen-model.ts
+
+scene = "preview";
+
+if (scene == "front") {
+  frontPart();
+} else if (scene == "back") {
+  backPart();
+} else if (scene == "ring") {
+  ringPart();
+} else if (scene == "all") {
+  translate([-${width}, 0, 0]) frontPart();
+  translate([${width}, 0, 0]) backPart();
+  ringPart();
+} else if (scene == "preview") {
+  frontPart();
+  translate([-${config.voxelSize}, 0, 0])
+  rotate([0, 180, 0]) backPart();
+}
+  `;
 
   // Generate front file (right side up)
-  const frontVoxels = splitModels.frontModel.getAllVoxels();
-  const frontContent = genModelCode(frontVoxels, config, commonCode);
-  await writeFile(join(projectPath, frontFile), frontContent);
-  console.log(`Generated ${frontFile} (${frontVoxels.length} voxels)`);
+  const frontVoxelCount = splitModels.frontModel.getAllVoxels().length;
+  console.log(`Front part: ${frontVoxelCount} voxels`);
+  generatedCode += `
+module frontPart() {
+  ${genModelCode(splitModels.frontModel, config)}
+}
+  `;
 
   // Generate back file (already transformed/flipped)
-  console.log('Generating back file...');
-  const backVoxels = splitModels.backModel.getAllVoxels();
-  const backContent = genModelCode(backVoxels, config, commonCode);
-  await writeFile(join(projectPath, backFile), backContent);
-  console.log(`Generated ${backFile} (${backVoxels.length} voxels)`);
+  const backVoxelCount = splitModels.backModel.getAllVoxels().length;
+  console.log(`Back part: ${backVoxelCount} voxels`);
+  generatedCode += `
+module backPart() {
+  ${genModelCode(splitModels.backModel, config)}
+}
+  `;
 
   // Generate ring file
-  const ringContent = generateRingFile(config, splitModels.backModel);
-  await writeFile(join(projectPath, ringFile), ringContent);
-  console.log(`Generated ${ringFile}`);
+  generatedCode += `
+module ringPart() {
+  ${genRingCode(splitModels.backModel, config)}
+}
+  `;
+
+  generatedCode += genCommonCode(config);
+
+  await writeFile(join(projectPath, name + '.scad'), generatedCode);
+  console.log(`Generated ${name}.scad`);
+
+  // Generate STL files
+  console.log('Generating STL files...');
+  try {
+    await Promise.all([
+      generateSTLFile(projectData, projectPath, 'front'),
+      generateSTLFile(projectData, projectPath, 'back'),
+      generateSTLFile(projectData, projectPath, 'ring'),
+    ]);
+    console.log('All STL files generated successfully');
+  } catch (error) {
+    console.error('Failed to generate one or more STL files');
+    throw error; // Re-throw to propagate the error to the main function
+  }
+}
+
+async function generateSTLFile(
+  projectData: ProjectData,
+  projectPath: string,
+  scene: string
+): Promise<void> {
+  const { name } = projectData;
+  const stlFile = join(projectPath, name + '-' + scene + '.stl');
+  const scadFile = join(projectPath, name + '.scad');
+
+  let startTime = performance.now();
+  console.log(`Generating ${name}-${scene}.stl...`);
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      exec(
+        `"${openSCADPath}" -o "${stlFile}" "${scadFile}" -D 'scene="${scene}"'`,
+        { cwd: projectPath },
+        (error, _stdout, stderr) => {
+          if (error) {
+            reject(new Error(`OpenSCAD failed: ${stderr || error.message}`));
+          } else {
+            resolve();
+          }
+        }
+      );
+    });
+    const durationMs = performance.now() - startTime;
+    console.log(`Generated ${name}-${scene}.stl (${durationMs.toFixed(2)}ms)`);
+  } catch (error) {
+    console.error(`Failed to generate ${name}-${scene}.stl:`);
+    console.error(error instanceof Error ? error.message : String(error));
+    throw error; // Re-throw to handle the failure in the Promise.all above
+  }
 }
 
 function genCommonCode(config: ProjectConfig): string {
@@ -241,7 +321,7 @@ module groovePart() {
     square([voxelSize/2 + ringWidth/2 + 1, ringWidth]);
 }
 
-module ringPart() {
+module ringLine() {
     // Generate positive ring piece that fits into groove
     translate([-ringWidth/2, -ringWidth/2])
     square([voxelSize/2 + ringWidth/2, ringWidth]);
@@ -251,22 +331,24 @@ module voxel(walls, grooves=[0,0,0,0]) {
     v2 = voxelSize/2;
 
     // Groves
-    if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
-    height = ringHeight/2 + wallThickness;
-    translate([0, 0, voxelSize/2 - height + wallThickness/2])
+    render() if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
+        height = ringHeight/2 + wallThickness;
+        translate([0, 0, voxelSize/2 - height + wallThickness/2])
         difference() {
             linear_extrude(height)
             square([voxelSize, voxelSize], center=true);
         
-        offset(ringTolerance)
-            translate([0,0,1 + wallThickness]) linear_extrude(ringHeight/2+1) {
-            if (grooves[0]) rotate(180) groovePart();
-            if (grooves[1]) rotate(90) groovePart();
-            if (grooves[2]) rotate(0) groovePart();
-            if (grooves[3]) rotate(270) groovePart();
+            
+            translate([0,0,1 + wallThickness]) 
+                linear_extrude(ringHeight/2+1) 
+                offset(ringTolerance) {
+                    if (grooves[0]) rotate(180) groovePart();
+                    if (grooves[1]) rotate(90) groovePart();
+                    if (grooves[2]) rotate(0) groovePart();
+                    if (grooves[3]) rotate(270) groovePart();
+                }
         }
     }
-}
     
     // 0: floor (-z)
     if (walls[0]) color([0,0,1]) translate([0, 0, -v2]) rotate([0, 180, 0]) voxelWall();
@@ -288,7 +370,7 @@ module voxel(walls, grooves=[0,0,0,0]) {
 }
 
 module voxelWall() {
-    hull() {        
+    render() hull() {        
         cube([
             voxelSize+wallThickness,
             voxelSize+wallThickness,
@@ -330,28 +412,28 @@ module ringCell(grooves=[0,0,0,0]) {
         translate([0, 0, voxelSize/2 - height/2])
             linear_extrude(height) {
                 // right (+x)
-                if (grooves[0]) rotate(180) ringPart();
-                if (grooves[1]) rotate(90) ringPart();
-                if (grooves[2]) rotate(0) ringPart();
-                if (grooves[3]) rotate(270) ringPart();
+                if (grooves[0]) rotate(180) ringLine();
+                if (grooves[1]) rotate(90) ringLine();
+                if (grooves[2]) rotate(0) ringLine();
+                if (grooves[3]) rotate(270) ringLine();
             }
     }
 }
 `;
 }
 
-function genModelCode(
-  voxels: ModelVoxel[],
-  config: ProjectConfig,
-  moduleCode: string
-): string {
+function genModelCode(model: VoxelModel, config: ProjectConfig): string {
   let content = `
-
-${moduleCode}
-
 // Main model
 `;
 
+  const voxels = model.getAllVoxels();
+
+  const height =
+    config.voxelSize * (2.5 + model.bounds.maxZ - model.bounds.minZ) +
+    config.wallThickness / 2;
+
+  content += `translate([0,0, ${height}])`;
   content += 'rotate([180,0,0]) union() {\n';
 
   voxels.forEach(voxel => {
@@ -382,18 +464,16 @@ ${moduleCode}
   return content;
 }
 
-function generateRingFile(config: ProjectConfig, model: VoxelModel): string {
-  const timestamp = new Date().toISOString();
+function genRingCode(model: VoxelModel, config: ProjectConfig): string {
   const perimeterVoxels = model.getPerimeterVoxels();
-  const moduleCode = genCommonCode(config);
 
-  return `// Generated ring file
-// Generated at ${timestamp}
-// by gen-model.ts
+  const height =
+    config.voxelSize * (2.5 + model.bounds.maxZ - model.bounds.minZ) -
+    config.ringHeight / 2;
 
-${moduleCode}
-
+  return `
 // Rings for connecting front and back parts
+translate([0,0, ${-height}])
 union() {
 ${perimeterVoxels
   .map(voxel => {
