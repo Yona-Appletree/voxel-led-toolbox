@@ -1,7 +1,3 @@
 {
-  "voxelSize": 10,
-  "wallThickness": 2,
-  "ringWidth": 2,
-  "ringHeight": 6,
-  "ringTolerance": 0.2
+  "voxelSize": 12
 }

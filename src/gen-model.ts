@@ -20,6 +20,15 @@ import { exec } from 'child_process';
 
 const openSCADPath = '/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD';
 
+// Default config values
+const defaultConfig: ProjectConfig = {
+  voxelSize: 10,
+  wallThickness: 2,
+  ringWidth: 3,
+  ringHeight: 10,
+  ringTolerance: 0.025,
+};
+
 // Main entry point
 if (import.meta.url === `file://${encodeURI(process.argv[1] || '')}`) {
   main(process.argv.slice(2)).catch(error => {
@@ -95,10 +104,10 @@ async function askUserToCreateProject(projectName: string): Promise<boolean> {
 // Project configuration schema
 const ProjectConfig = z.object({
   voxelSize: z.number().default(10),
-  wallThickness: z.number().default(2),
-  ringWidth: z.number().default(2),
-  ringHeight: z.number().default(6),
-  ringTolerance: z.number().default(0.3),
+  wallThickness: z.number().optional(),
+  ringWidth: z.number().optional(),
+  ringHeight: z.number().optional(),
+  ringTolerance: z.number().optional(),
   splitLayer: z.number().optional(),
 });
 
@@ -120,15 +129,6 @@ async function createNewProject(
 
   // Create project directory
   mkdirSync(projectPath, { recursive: true });
-
-  // Create default project config
-  const defaultConfig: ProjectConfig = {
-    voxelSize: 10,
-    wallThickness: 2,
-    ringWidth: 2,
-    ringHeight: 6,
-    ringTolerance: 0.2,
-  };
 
   await writeFile(
     join(projectPath, `${projectName}.json`),
@@ -161,7 +161,7 @@ async function loadProjectFromPath(
 
   const configPath = join(projectPath, configFile);
   const configData = JSON.parse(await readFile(configPath, 'utf8'));
-  const config = ProjectConfig.parse(configData);
+  const config = ProjectConfig.parse({ ...defaultConfig, ...configData });
 
   // Load voxel data
   const voxelPath = join(projectPath, projectName + '.txt');
@@ -199,10 +199,19 @@ async function generateOpenSCADFiles(
 
   const width = config.voxelSize * (model.bounds.maxX - model.bounds.minX);
 
+  // check if there is a file called additions.scad in the project path
+  const additionsPath = join(projectPath, 'additions.scad');
+  const additionsExists = existsSync(additionsPath);
+  if (additionsExists) {
+    console.log(`Additions file found at ${additionsPath}`);
+  }
+
   // Generate common module code
   let generatedCode = `
 // Generated at ${new Date().toISOString()}
 // by gen-model.ts
+
+${additionsExists ? `include <additions.scad>` : ''}
 
 scene = "preview";
 
@@ -226,20 +235,49 @@ if (scene == "front") {
   // Generate front file (right side up)
   const frontVoxelCount = splitModels.frontModel.getAllVoxels().length;
   console.log(`Front part: ${frontVoxelCount} voxels`);
-  generatedCode += `
+  if (additionsExists) {
+    generatedCode += `
+module frontPart() {
+  difference() {
+    union() {
+      ${genModelCode(splitModels.frontModel, config)}
+      frontAdditions();
+    }
+    frontCutouts();
+  }
+  ${additionsExists ? `frontAdditions();` : ''}
+}
+  `;
+  } else {
+    generatedCode += `
 module frontPart() {
   ${genModelCode(splitModels.frontModel, config)}
 }
   `;
+  }
 
   // Generate back file (already transformed/flipped)
   const backVoxelCount = splitModels.backModel.getAllVoxels().length;
   console.log(`Back part: ${backVoxelCount} voxels`);
-  generatedCode += `
+  if (additionsExists) {
+    generatedCode += `
+module backPart() {
+  difference() {
+    union() {
+      ${genModelCode(splitModels.backModel, config)}
+      backAdditions();
+    }
+    backCutouts();
+  }
+}
+  `;
+  } else {
+    generatedCode += `
 module backPart() {
   ${genModelCode(splitModels.backModel, config)}
 }
   `;
+  }
 
   // Generate ring file
   generatedCode += `
@@ -324,7 +362,7 @@ module groovePart() {
 module ringLine() {
     // Generate positive ring piece that fits into groove
     translate([-ringWidth/2, -ringWidth/2])
-    square([voxelSize/2 + ringWidth/2, ringWidth]);
+    square([voxelSize/2 + ringWidth/2 + 1, ringWidth]);
 }
 
 module voxel(walls, grooves=[0,0,0,0]) {
@@ -332,16 +370,16 @@ module voxel(walls, grooves=[0,0,0,0]) {
 
     // Groves
     render() if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
-        height = ringHeight/2 + wallThickness;
-        translate([0, 0, voxelSize/2 - height + wallThickness/2])
+        height = voxelSize;
+        
         difference() {
-            linear_extrude(height)
-            square([voxelSize, voxelSize], center=true);
+            translate([0, 0, voxelSize/2 - height + wallThickness/2])
+               linear_extrude(height)
+                square([voxelSize, voxelSize], center=true);
         
             
-            translate([0,0,1 + wallThickness]) 
-                linear_extrude(ringHeight/2+1) 
-                offset(ringTolerance) {
+            translate([0,0,1]) 
+                linear_extrude(ringHeight/2+1) {
                     if (grooves[0]) rotate(180) groovePart();
                     if (grooves[1]) rotate(90) groovePart();
                     if (grooves[2]) rotate(0) groovePart();
@@ -410,7 +448,7 @@ module ringCell(grooves=[0,0,0,0]) {
     if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
         height = ringHeight;
         translate([0, 0, voxelSize/2 - height/2])
-            linear_extrude(height) {
+            linear_extrude(height) offset(-ringTolerance) union() {
                 // right (+x)
                 if (grooves[0]) rotate(180) ringLine();
                 if (grooves[1]) rotate(90) ringLine();

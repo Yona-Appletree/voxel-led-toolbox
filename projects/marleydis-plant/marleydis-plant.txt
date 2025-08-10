@@ -1,0 +1,3 @@
+# Goxel voxel data
+# Format: X Y Z RRGGBB
+# Add your voxel data here

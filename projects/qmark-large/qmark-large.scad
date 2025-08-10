@@ -1,8 +1,10 @@
 
-// Generated at 2025-08-08T23:26:55.391Z
+// Generated at 2025-08-10T01:39:04.238Z
 // by gen-model.ts
 
-scene = "all";
+include <additions.scad>
+
+scene = "preview";
 
 if (scene == "front") {
   frontPart();
@@ -11,19 +13,21 @@ if (scene == "front") {
 } else if (scene == "ring") {
   ringPart();
 } else if (scene == "all") {
-  translate([-150, 0, 0]) frontPart();
-  translate([150, 0, 0]) backPart();
+  translate([-165, 0, 0]) frontPart();
+  translate([165, 0, 0]) backPart();
   ringPart();
 } else if (scene == "preview") {
   frontPart();
-  translate([-10, 0, 0])
+  translate([-11, 0, 0])
   rotate([0, 180, 0]) backPart();
 }
   
 module frontPart() {
-  
+  difference() {
+    union() {
+      
 // Main model
-translate([0,0, 46])rotate([180,0,0]) union() {
+translate([0,0, 50.5])rotate([180,0,0]) union() {
     v(-1, -11, 2) voxel(walls=[1,0,0,1,1,0], grooves=[0,0,0,0]);
     v(0, -11, 2) voxel(walls=[1,1,0,0,1,0], grooves=[0,0,0,0]);
     v(-2, -10, 2) voxel(walls=[1,0,0,1,1,0], grooves=[0,0,0,0]);
@@ -430,12 +434,19 @@ translate([0,0, 46])rotate([180,0,0]) union() {
     v(3, 9, 4) voxel(walls=[1,1,1,0,0,0], grooves=[1,0,0,1]);
 }
 
+      frontAdditions();
+    }
+    frontCutouts();
+  }
+  frontAdditions();
 }
   
 module backPart() {
-  
+  difference() {
+    union() {
+      
 // Main model
-translate([0,0, 46])rotate([180,0,0]) union() {
+translate([0,0, 50.5])rotate([180,0,0]) union() {
     v(-1, -11, 2) voxel(walls=[1,0,0,1,1,0], grooves=[0,0,0,0]);
     v(0, -11, 2) voxel(walls=[1,1,0,0,1,0], grooves=[0,0,0,0]);
     v(-2, -10, 2) voxel(walls=[1,0,0,1,1,0], grooves=[0,0,0,0]);
@@ -842,12 +853,16 @@ translate([0,0, 46])rotate([180,0,0]) union() {
     v(3, 9, 4) voxel(walls=[1,1,1,0,0,0], grooves=[1,0,0,1]);
 }
 
+      backAdditions();
+    }
+    backCutouts();
+  }
 }
   
 module ringPart() {
   
 // Rings for connecting front and back parts
-translate([0,0, -42])
+translate([0,0, -44.5])
 union() {
     v(-2, -12, 4) ringCell(grooves=[0,1,1,0]);
     v(-1, -12, 4) ringCell(grooves=[1,0,1,0]);
@@ -954,11 +969,11 @@ union() {
 }
   
 // Voxel utility modules
-voxelSize = 10;
+voxelSize = 11;
 wallThickness = 2;
-ringWidth = 2;
-ringHeight = 6;
-ringTolerance = 0.2;
+ringWidth = 3;
+ringHeight = 10;
+ringTolerance = 0.025;
 
 module v(x, y, z) {
     translate([x, y, z] * voxelSize) children();
@@ -972,24 +987,24 @@ module groovePart() {
 module ringLine() {
     // Generate positive ring piece that fits into groove
     translate([-ringWidth/2, -ringWidth/2])
-    square([voxelSize/2 + ringWidth/2, ringWidth]);
+    square([voxelSize/2 + ringWidth/2 + 1, ringWidth]);
 }
 
 module voxel(walls, grooves=[0,0,0,0]) {
     v2 = voxelSize/2;
 
     // Groves
-    if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
-        height = ringHeight/2 + wallThickness;
-        translate([0, 0, voxelSize/2 - height + wallThickness/2])
+    render() if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
+        height = voxelSize;
+        
         difference() {
-            linear_extrude(height)
-            square([voxelSize, voxelSize], center=true);
+            translate([0, 0, voxelSize/2 - height + wallThickness/2])
+               linear_extrude(height)
+                square([voxelSize, voxelSize], center=true);
         
             
-            translate([0,0,1 + wallThickness]) 
-                linear_extrude(ringHeight/2+1) 
-                offset(ringTolerance) {
+            translate([0,0,1]) 
+                linear_extrude(ringHeight/2+1) {
                     if (grooves[0]) rotate(180) groovePart();
                     if (grooves[1]) rotate(90) groovePart();
                     if (grooves[2]) rotate(0) groovePart();
@@ -1018,7 +1033,7 @@ module voxel(walls, grooves=[0,0,0,0]) {
 }
 
 module voxelWall() {
-    hull() {        
+    render() hull() {        
         cube([
             voxelSize+wallThickness,
             voxelSize+wallThickness,
@@ -1058,7 +1073,7 @@ module ringCell(grooves=[0,0,0,0]) {
     if (grooves[0] || grooves[1] || grooves[2] || grooves[3]) {
         height = ringHeight;
         translate([0, 0, voxelSize/2 - height/2])
-            linear_extrude(height) {
+            linear_extrude(height) offset(-ringTolerance) union() {
                 // right (+x)
                 if (grooves[0]) rotate(180) ringLine();
                 if (grooves[1]) rotate(90) ringLine();

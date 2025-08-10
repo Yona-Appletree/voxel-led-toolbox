@@ -1,3 +1,11 @@
-# Goxel voxel data
-# Format: X Y Z RRGGBB
-# Add your voxel data here
+# Goxel 0.15.1
+# One line per voxel
+# X Y Z RRGGBB
+-1 -1 1 ffffff
+-1 -1 2 ffffff
+0 -1 1 ffffff
+0 -1 2 ffffff
+-1 0 1 ffffff
+-1 0 2 ffffff
+0 0 1 ffffff
+0 0 2 ffffff
